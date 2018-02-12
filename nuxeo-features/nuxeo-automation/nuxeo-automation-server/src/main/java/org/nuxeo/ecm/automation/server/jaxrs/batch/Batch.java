@@ -21,6 +21,14 @@
  */
 package org.nuxeo.ecm.automation.server.jaxrs.batch;
 
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.nuxeo.ecm.core.api.Blob;
+import org.nuxeo.ecm.core.api.Blobs;
+import org.nuxeo.ecm.core.transientstore.api.TransientStore;
+import org.nuxeo.runtime.api.Framework;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
@@ -31,14 +39,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.nuxeo.ecm.core.api.Blob;
-import org.nuxeo.ecm.core.api.Blobs;
-import org.nuxeo.ecm.core.transientstore.api.TransientStore;
-import org.nuxeo.runtime.api.Framework;
 
 /**
  * Batch Object to encapsulate all data related to a batch, especially the temporary files used for Blobs.
@@ -52,6 +52,8 @@ public class Batch {
     protected static final Log log = LogFactory.getLog(Batch.class);
 
     public static final String CHUNKED_PARAM_NAME = "chunked";
+
+    protected TransientStore transientStore;
 
     protected String key;
 
@@ -81,6 +83,12 @@ public class Batch {
     public Batch(String provider, String key, Map<String, Serializable> fileEntries, BatchHandler handler) {
         this(provider, key, fileEntries);
         this.handler = handler;
+    }
+
+    public Batch(TransientStore transientStore, String provider, String key, Map<String, Serializable> fileEntries, BatchHandler handler) {
+        this(provider, key, fileEntries);
+        this.handler = handler;
+        this.transientStore = transientStore;
     }
 
     public String getKey() {
@@ -124,7 +132,7 @@ public class Batch {
     }
 
     public List<BatchFileEntry> getFileEntries() {
-        List<BatchFileEntry> batchFileEntries = new ArrayList<BatchFileEntry>();
+        List<BatchFileEntry> batchFileEntries = new ArrayList<>();
         List<String> sortedFileIndexes = getOrderedFileIndexes();
         for (String index : sortedFileIndexes) {
             BatchFileEntry fileEntry = getFileEntry(index);
@@ -140,13 +148,13 @@ public class Batch {
     }
 
     public BatchFileEntry getFileEntry(String index, boolean fetchBlobs) {
-        BatchManager bm = Framework.getService(BatchManager.class);
         String fileEntryKey = (String) fileEntries.get(index);
         if (fileEntryKey == null) {
             return null;
         }
-        TransientStore ts = bm.getTransientStore();
-        Map<String, Serializable> fileEntryParams = ts.getParameters(fileEntryKey);
+
+        TransientStore transientStore = getTransientStore();
+        Map<String, Serializable> fileEntryParams = transientStore.getParameters(fileEntryKey);
         if (fileEntryParams == null) {
             return null;
         }
@@ -156,7 +164,7 @@ public class Batch {
         } else {
             Blob blob = null;
             if (fetchBlobs) {
-                List<Blob> fileEntryBlobs = ts.getBlobs(fileEntryKey);
+                List<Blob> fileEntryBlobs = transientStore.getBlobs(fileEntryKey);
                 if (fileEntryBlobs == null) {
                     return null;
                 }
@@ -182,11 +190,24 @@ public class Batch {
         blob.setFilename(name);
 
         String fileEntryKey = key + "_" + index;
-        BatchManager bm = Framework.getService(BatchManager.class);
-        TransientStore ts = bm.getTransientStore();
-        ts.putBlobs(fileEntryKey, Collections.singletonList(blob));
-        ts.putParameter(fileEntryKey, CHUNKED_PARAM_NAME, String.valueOf(false));
-        ts.putParameter(key, index, fileEntryKey);
+
+        TransientStore transientStore = getTransientStore();
+
+        transientStore.putBlobs(fileEntryKey, Collections.singletonList(blob));
+        transientStore.putParameter(fileEntryKey, CHUNKED_PARAM_NAME, String.valueOf(false));
+        transientStore.putParameter(key, index, fileEntryKey);
+
+        return fileEntryKey;
+    }
+
+    public String addBlob(String index, Blob blob) {
+        String fileEntryKey = key + "_" + index;
+
+        TransientStore transientStore = getTransientStore();
+
+        transientStore.putBlobs(fileEntryKey, Collections.singletonList(blob));
+        transientStore.putParameter(fileEntryKey, CHUNKED_PARAM_NAME, String.valueOf(false));
+        transientStore.putParameter(key, index, fileEntryKey);
 
         return fileEntryKey;
     }
@@ -199,16 +220,17 @@ public class Batch {
      */
     public String addChunk(String index, InputStream is, int chunkCount, int chunkIndex, String fileName,
             String mimeType, long fileSize) throws IOException {
-        BatchManager bm = Framework.getService(BatchManager.class);
+
         Blob blob = Blobs.createBlob(is);
 
         String fileEntryKey = key + "_" + index;
         BatchFileEntry fileEntry = getFileEntry(index);
         if (fileEntry == null) {
             fileEntry = new BatchFileEntry(fileEntryKey, chunkCount, fileName, mimeType, fileSize);
-            TransientStore ts = bm.getTransientStore();
-            ts.putParameters(fileEntryKey, fileEntry.getParams());
-            ts.putParameter(key, index, fileEntryKey);
+            TransientStore transientStore = getTransientStore();
+
+            transientStore.putParameters(fileEntryKey, fileEntry.getParams());
+            transientStore.putParameter(key, index, fileEntryKey);
         }
         fileEntry.addChunk(chunkIndex, blob);
 
@@ -221,8 +243,7 @@ public class Batch {
     public void clean() {
         // Remove batch and all related storage entries from transient store, GC will clean up the files
         log.debug(String.format("Cleaning batch %s", key));
-        BatchManager bm = Framework.getService(BatchManager.class);
-        TransientStore ts = bm.getTransientStore();
+        TransientStore ts = getTransientStore();
         for (String fileIndex : fileEntries.keySet()) {
             removeFileEntry(fileIndex, ts);
         }
@@ -257,7 +278,10 @@ public class Batch {
         List<Blob> fileBlobs = ts.getBlobs(fileEntryKey);
         if (fileBlobs != null) {
             for (Blob blob : fileBlobs) {
-                FileUtils.deleteQuietly(blob.getFile().getParentFile());
+                if (blob.getFile() != null) {
+                    FileUtils.deleteQuietly(blob.getFile().getParentFile());
+                }
+
             }
         }
         ts.remove(fileEntryKey);
@@ -268,9 +292,8 @@ public class Batch {
      * @since 8.4
      */
     public boolean removeFileEntry(String index) {
-        BatchManager bm = Framework.getService(BatchManager.class);
-        TransientStore ts = bm.getTransientStore();
-        return removeFileEntry(index, ts);
+        TransientStore transientStore = getTransientStore();
+        return removeFileEntry(index, transientStore);
     }
 
     /**
@@ -285,4 +308,17 @@ public class Batch {
     }
 
     public Map<String, Object> getBatchExtraInfo() { return extraInfo; }
+
+    private final Object lock = new Object();
+
+    private TransientStore getTransientStore() {
+        synchronized (lock) {
+            if(transientStore == null) {
+                BatchManager bm = Framework.getService(BatchManager.class);
+                transientStore = bm.getTransientStore();
+            }
+        }
+
+        return transientStore;
+    }
 }

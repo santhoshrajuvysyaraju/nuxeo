@@ -1,6 +1,6 @@
 package org.nuxeo.ecm.automation.server.jaxrs.batch.handler;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.nuxeo.ecm.automation.server.jaxrs.batch.Batch;
@@ -20,12 +20,21 @@ public abstract class AbstractBatchHandler implements BatchHandler {
 
     private String name;
 
-    public AbstractBatchHandler(String name) {
+    protected AbstractBatchHandler(String name) {
+        this();
         this.name = name;
+    }
+
+    protected AbstractBatchHandler() {
+
     }
 
     @Override public String getName() {
         return name;
+    }
+
+    @Override public void setName(String name) {
+        this.name = name;
     }
 
     @Override public abstract Batch newBatch();

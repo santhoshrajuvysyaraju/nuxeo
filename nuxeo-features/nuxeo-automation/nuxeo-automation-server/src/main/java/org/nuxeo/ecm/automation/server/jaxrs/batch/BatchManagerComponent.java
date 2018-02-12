@@ -54,7 +54,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 /**
  * Runtime Component implementing the {@link BatchManager} service with the {@link TransientStore}.
@@ -385,6 +384,7 @@ public class BatchManagerComponent extends DefaultComponent implements BatchMana
             if (BatchHandlerDescriptor.class.isAssignableFrom(contribution.getClass())) {
                 BatchHandlerDescriptor contributionDescriptor = (BatchHandlerDescriptor) contribution;
                 BatchHandler batchHandler = newInstance(contributionDescriptor.getKlass());
+                batchHandler.setName(contributionDescriptor.getName());
                 batchHandler.init(contributionDescriptor.getProperties());
                 handlers.put(contributionDescriptor.getName(), batchHandler);
             }

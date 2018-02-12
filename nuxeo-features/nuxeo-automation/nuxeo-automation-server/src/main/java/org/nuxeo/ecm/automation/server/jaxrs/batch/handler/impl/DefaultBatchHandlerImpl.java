@@ -1,10 +1,12 @@
 package org.nuxeo.ecm.automation.server.jaxrs.batch.handler.impl;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.nuxeo.ecm.automation.server.jaxrs.batch.Batch;
+import org.nuxeo.ecm.automation.server.jaxrs.batch.BatchFileEntry;
 import org.nuxeo.ecm.automation.server.jaxrs.batch.handler.AbstractBatchHandler;
+import org.nuxeo.ecm.automation.server.jaxrs.batch.handler.BatchFileInfo;
 import org.nuxeo.ecm.core.api.NuxeoException;
 import org.nuxeo.ecm.core.transientstore.api.TransientStore;
 import org.nuxeo.ecm.core.transientstore.api.TransientStoreService;
@@ -13,6 +15,7 @@ import org.nuxeo.runtime.api.Framework;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public class DefaultBatchHandlerImpl extends AbstractBatchHandler {
 
@@ -78,6 +81,16 @@ public class DefaultBatchHandlerImpl extends AbstractBatchHandler {
         transientStoreName = configProperties.get(Config.TRANSIENT_STORE_NAME);
 
         super.init(configProperties);
+    }
+
+    @Override
+    public boolean completeUpload(String batchId, String fileIndex, BatchFileInfo fileInfo) {
+        Batch batch = getBatch(batchId);
+        BatchFileEntry fileEntry = batch.getFileEntry(fileIndex, true);
+        return fileEntry.getFileSize() == fileInfo.getFileSize() &&
+                Objects.equals(fileEntry.getMimeType(), fileInfo.getMimeType()) &&
+                Objects.equals(fileEntry.getBlob().getDigest(), fileInfo.getMd5())
+                ;
     }
 
     private boolean containsRequired(Map<String, String> configProperties) {

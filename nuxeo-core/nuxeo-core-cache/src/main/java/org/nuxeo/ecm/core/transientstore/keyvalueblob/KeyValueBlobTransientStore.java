@@ -413,6 +413,14 @@ public class KeyValueBlobTransientStore implements TransientStoreProvider {
         markEntryExists(key);
     }
 
+    private String writeBlob(BlobProvider provider, Blob blob) {
+        try {
+            return provider.writeBlob(blob);
+        } catch (IOException e) {
+            throw new NuxeoException(e);
+        }
+    }
+
     protected void removeBlobs(String key) {
         KeyValueStore kvs = getKeyValueStore();
         String json = kvs.getString(key + DOT_BLOBINFO);

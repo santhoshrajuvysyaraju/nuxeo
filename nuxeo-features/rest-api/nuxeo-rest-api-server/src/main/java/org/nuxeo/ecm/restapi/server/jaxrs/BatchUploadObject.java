@@ -18,10 +18,11 @@
  */
 package org.nuxeo.ecm.restapi.server.jaxrs;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.nuxeo.ecm.automation.OperationContext;
@@ -32,6 +33,7 @@ import org.nuxeo.ecm.automation.server.jaxrs.batch.BatchFileEntry;
 import org.nuxeo.ecm.automation.server.jaxrs.batch.BatchHandler;
 import org.nuxeo.ecm.automation.server.jaxrs.batch.BatchManager;
 import org.nuxeo.ecm.automation.server.jaxrs.batch.BatchManagerConstants;
+import org.nuxeo.ecm.automation.server.jaxrs.batch.handler.BatchFileInfo;
 import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.NuxeoException;
@@ -164,7 +166,7 @@ public class BatchUploadObject extends AbstractResource<ResourceTypeImpl> {
 
         return Response.seeOther(
                 UriBuilder
-                        .fromPath(getContext().head().getPath())
+                        .fromPath(getContext().head().getPath().replace("/nuxeo/site", StringUtils.EMPTY))
                         .path("/upload/{batchId}")
                         .build(batch.getKey())
         ).build();
@@ -213,7 +215,7 @@ public class BatchUploadObject extends AbstractResource<ResourceTypeImpl> {
             return buildTextResponse(Status.BAD_REQUEST, "fileIdx request path parameter must be a number");
         }
 
-        // Parameters are passed as request header, the request body is the stream
+        // Parameters are passed as request header, the request body is the stream~
         String contentType = request.getHeader("Content-Type");
         String uploadType = request.getHeader("X-Upload-Type");
         // Use non chunked mode by default if X-Upload-Type header is not provided
@@ -352,6 +354,7 @@ public class BatchUploadObject extends AbstractResource<ResourceTypeImpl> {
 
 
         result.put("fileEntries", fileInfos);
+        result.put("batchId", batch.getKey());
 
         return buildResponse(Status.OK, result);
     }
@@ -421,6 +424,43 @@ public class BatchUploadObject extends AbstractResource<ResourceTypeImpl> {
     public Object execute(@PathParam(REQUEST_BATCH_ID) String batchId, @PathParam(REQUEST_FILE_IDX) String fileIdx,
             @PathParam(OPERATION_ID) String operationId, ExecutionRequest xreq) {
         return executeBatch(batchId, fileIdx, operationId, request, xreq);
+    }
+
+    @POST
+    @Path("{batchId}/{fileIdx}/complete")
+    public Response uploadCompleted(@PathParam(REQUEST_BATCH_ID) String batchId
+            , @PathParam(REQUEST_FILE_IDX) String fileIdx, String body
+                                    ) throws Exception {
+
+        JsonNode jsonNode = new ObjectMapper().readTree(body);
+
+
+        Batch batch = batchManager.getBatch(batchId);
+        if (batch == null) {
+            return Response.status(Status.NOT_FOUND).build();
+        }
+
+        Long fileSize = jsonNode.hasNonNull("fileSize") ? jsonNode.get("fileSize").asLong() : -1L;
+        String md5 = jsonNode.hasNonNull("md5") ? jsonNode.get("md5").asText() : null;
+        String name = jsonNode.hasNonNull("name") ? jsonNode.get("name").asText() : null;
+        String mimeType = jsonNode.hasNonNull("mimeType") ? jsonNode.get("mimeType").asText(null) : null;
+        String key = jsonNode.hasNonNull("key") ? jsonNode.get("key").asText(null) : null;
+        String etag = jsonNode.hasNonNull("etag") ? jsonNode.get("etag").asText(null) : null;
+
+        BatchFileInfo batchFileInfo = BatchFileInfo.builder()
+                .withFileSize(fileSize)
+                .withMd5(md5)
+                .withName(name)
+                .withMimeType(mimeType)
+                .withKey(key)
+                .build();
+
+        BatchHandler handler = batchManager.getHandlerByName(batch.getProvider());
+        if (handler.completeUpload(batchId, fileIdx, batchFileInfo)) {
+            return Response.ok().build();
+        }
+
+        return Response.status(Status.CONFLICT).build();
     }
 
     protected Object executeBatch(String batchId, String fileIdx, String operationId, HttpServletRequest request,
