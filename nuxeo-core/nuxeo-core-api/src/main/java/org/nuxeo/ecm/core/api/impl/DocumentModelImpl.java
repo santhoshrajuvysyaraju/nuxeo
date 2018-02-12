@@ -847,7 +847,9 @@ public class DocumentModelImpl implements DocumentModel, Cloneable {
 
     @Override
     public boolean followTransition(final String transition) {
-        boolean res = getSession().followTransition(ref, transition);
+        // TODO is it better to make public followTransition(DocumentRef, String, Map<String, Serializable>) ?
+        // give this DocumentModel in order to pass context data
+        boolean res = getSession().followTransition(this, transition);
         // Invalidate the prefetched value in this case.
         if (res) {
             currentLifeCycleState = null;

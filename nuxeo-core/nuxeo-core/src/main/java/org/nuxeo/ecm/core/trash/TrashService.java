@@ -34,10 +34,25 @@ import org.nuxeo.ecm.core.api.DocumentRef;
 public interface TrashService {
 
     /**
-     * Can a child of the folder be deleted?
+     * Skip the renaming.
+     *
+     * @since 10.1
+     */
+    String SKIP_TRASH_RENAMING = "skipTrashRenaming";
+
+    /**
+     * {@link TrashService} was already called. This is useful to bring backward mechanism on
+     * followTransition("deleted").
+     *
+     * @since 10.1
+     */
+    String IS_ALREADY_CALLED = "isAlreadyCalled";
+
+    /**
+     * Can a child of the folder be trashed?
      *
      * @param folder the folder
-     * @return {@code true} if the folder allows its children to be deleted
+     * @return {@code true} if the folder allows its children to be trashed
      */
     boolean folderAllowsDelete(DocumentModel folder);
 
@@ -45,7 +60,7 @@ public interface TrashService {
      * Is at least one doc deletable according to its container?
      *
      * @param docs the documents
-     * @return {@code true} if one doc is in a folder that allows its children to be deleted
+     * @return {@code true} if one doc is in a folder that allows its children to be trashed
      */
     boolean checkDeletePermOnParents(List<DocumentModel> docs);
 
@@ -62,8 +77,7 @@ public interface TrashService {
     /**
      * Are all documents purgeable/undeletable?
      * <p>
-     * Documents need to be in the deleted lifecycle state for this to be true, in addition to the standard permission
-     * checks.
+     * Documents need to be in the trash for this to be true, in addition to the standard permission checks.
      *
      * @param docs the documents
      * @param principal the current user (to check locks)
@@ -77,7 +91,7 @@ public interface TrashService {
      * @param docs the documents
      * @param principal the current user (to check locks)
      * @param checkProxies {@code true} to count proxies as non-deletable
-     * @param checkDeleted {@code true} if documents have to be in the deleted state to be considered (otherwise
+     * @param checkDeleted {@code true} if documents have to be in the trashed state to be considered (otherwise
      *            forbidden)
      * @return the trash info
      */
@@ -95,15 +109,27 @@ public interface TrashService {
     DocumentModel getAboveDocument(DocumentModel doc, Set<Path> paths);
 
     /**
-     * Moves documents to the trash, or directly deletes them if their lifecycle does not allow trash use.
+     * Moves documents to the trash.
      * <p>
-     * Do nothing if the document current state is deleted.
+     * Do nothing if the document current state is trashed.
      * <p>
      * Placeless documents are deleted immediately.
      *
      * @param docs the documents to trash
      */
     void trashDocuments(List<DocumentModel> docs);
+
+    /**
+     * Moves document to the trash.
+     * <p>
+     * Do nothing if the document current state is trashed.
+     * <p>
+     * Placeless documents are deleted immediately.
+     *
+     * @param doc the document to trash
+     * @since 10.1
+     */
+    void trashDocument(DocumentModel doc);
 
     /**
      * Purges (completely deletes) documents .
@@ -116,12 +142,21 @@ public interface TrashService {
     /**
      * Undeletes documents (and ancestors if needed to make them visible).
      * <p>
-     * Also fires async events to undelete the children.
+     * Also fires async events to untrash the children.
      *
      * @param docs the documents to undelete
-     * @return the set of ancestors whose children have been undeleted (for UI notification)
+     * @return the set of ancestors whose children have been untrashed (for UI notification)
      */
     Set<DocumentRef> undeleteDocuments(List<DocumentModel> docs);
+
+    /**
+     * Unmoves document from the trash.
+     * <p>
+     * Also fires async events to untrash the children.
+     *
+     * @param doc the document to untrash
+     */
+    void untrashDocument(DocumentModel doc);
 
     /**
      * Get all documents from the trash of the current document.
@@ -136,7 +171,6 @@ public interface TrashService {
      * Mangles the name of a document to avoid collisions with non-trashed documents when it's in the trash.
      *
      * @param doc the document
-     * @return
      * @since 7.3
      */
     String mangleName(DocumentModel doc);

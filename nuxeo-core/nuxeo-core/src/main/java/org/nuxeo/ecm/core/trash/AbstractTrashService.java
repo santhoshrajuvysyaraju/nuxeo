@@ -21,6 +21,7 @@ package org.nuxeo.ecm.core.trash;
 import java.io.Serializable;
 import java.security.Principal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -51,6 +52,16 @@ import org.nuxeo.runtime.api.Framework;
  * @since 10.1
  */
 public abstract class AbstractTrashService implements TrashService {
+
+    @Override
+    public void trashDocument(DocumentModel doc) {
+        trashDocuments(Collections.singletonList(doc));
+    }
+
+    @Override
+    public void untrashDocument(DocumentModel doc) {
+        undeleteDocuments(Collections.singletonList(doc));
+    }
 
     @Override
     public boolean folderAllowsDelete(DocumentModel folder) {

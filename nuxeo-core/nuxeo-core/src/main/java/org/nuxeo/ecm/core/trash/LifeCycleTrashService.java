@@ -32,9 +32,7 @@ import org.nuxeo.ecm.core.api.LifeCycleConstants;
 import org.nuxeo.ecm.core.api.security.SecurityConstants;
 
 /**
- * TODO: put the class
- * 
- * @deprecated since 10.1, use {@link } instead.
+ * @deprecated since 10.1, use {@link PropertyTrashService} instead.
  */
 public class LifeCycleTrashService extends AbstractTrashService {
 
@@ -47,23 +45,25 @@ public class LifeCycleTrashService extends AbstractTrashService {
         }
         CoreSession session = docs.get(0).getCoreSession();
         for (DocumentModel doc : docs) {
+            // add context data for backward compatibility mechanism
+            doc.putContextData(IS_ALREADY_CALLED, Boolean.TRUE);
             DocumentRef docRef = doc.getRef();
             if (session.getAllowedStateTransitions(docRef).contains(LifeCycleConstants.DELETE_TRANSITION)
                     && !doc.isProxy()) {
                 if (!session.canRemoveDocument(docRef)) {
                     throw new DocumentSecurityException("User " + session.getPrincipal().getName()
-                                                                + " does not have the permission to remove the document " + doc.getId() + " ("
-                                                                + doc.getPath() + ")");
+                            + " does not have the permission to remove the document " + doc.getId() + " ("
+                            + doc.getPath() + ")");
                 }
                 trashDocument(session, doc);
             } else if (session.isTrashed(docRef)) {
                 log.warn("Document " + doc.getId() + " of type " + doc.getType()
-                                 + " is already in the trash, nothing to do");
+                        + " is already in the trash, nothing to do");
                 return;
             } else {
                 log.warn("Document " + doc.getId() + " of type " + doc.getType() + " in state "
-                                 + doc.getCurrentLifeCycleState() + " does not support transition "
-                                 + LifeCycleConstants.DELETE_TRANSITION + ", it will be deleted immediately");
+                        + doc.getCurrentLifeCycleState() + " does not support transition "
+                        + LifeCycleConstants.DELETE_TRANSITION + ", it will be deleted immediately");
                 session.removeDocument(docRef);
             }
         }
@@ -71,12 +71,14 @@ public class LifeCycleTrashService extends AbstractTrashService {
     }
 
     protected void trashDocument(CoreSession session, DocumentModel doc) {
-        String name = mangleName(doc);
         if (doc.getParentRef() == null) {
             // handle placeless document
             session.removeDocument(doc.getRef());
         } else {
-            session.move(doc.getRef(), doc.getParentRef(), name);
+            if (!Boolean.parseBoolean(String.valueOf(doc.getContextData(SKIP_TRASH_RENAMING)))) {
+                String name = mangleName(doc);
+                session.move(doc.getRef(), doc.getParentRef(), name);
+            }
             session.followTransition(doc, LifeCycleConstants.DELETE_TRANSITION);
         }
     }
@@ -121,7 +123,7 @@ public class LifeCycleTrashService extends AbstractTrashService {
                 undeleted.add(docRef);
             } else {
                 log.debug("Impossible to undelete document " + docRef + " as it does not support transition "
-                                  + LifeCycleConstants.UNDELETE_TRANSITION);
+                        + LifeCycleConstants.UNDELETE_TRANSITION);
             }
         }
         return undeleted;
@@ -153,10 +155,14 @@ public class LifeCycleTrashService extends AbstractTrashService {
 
     protected void undeleteDocument(CoreSession session, DocumentModel doc) {
         String name = doc.getName();
-        String newName = unmangleName(doc);
-        if (!newName.equals(name)) {
-            session.move(doc.getRef(), doc.getParentRef(), newName);
+        if (!Boolean.parseBoolean(String.valueOf(doc.getContextData(SKIP_TRASH_RENAMING)))) {
+            String newName = unmangleName(doc);
+            if (!newName.equals(name)) {
+                session.move(doc.getRef(), doc.getParentRef(), newName);
+            }
         }
+        // add context data for backward compatibility mechanism
+        doc.putContextData(IS_ALREADY_CALLED, Boolean.TRUE);
         session.followTransition(doc, LifeCycleConstants.UNDELETE_TRANSITION);
     }
 

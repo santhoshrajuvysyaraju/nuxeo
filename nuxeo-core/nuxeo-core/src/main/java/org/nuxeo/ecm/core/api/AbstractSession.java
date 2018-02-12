@@ -97,6 +97,7 @@ import org.nuxeo.ecm.core.schema.SchemaManager;
 import org.nuxeo.ecm.core.schema.types.CompositeType;
 import org.nuxeo.ecm.core.schema.types.Schema;
 import org.nuxeo.ecm.core.security.SecurityService;
+import org.nuxeo.ecm.core.trash.TrashService;
 import org.nuxeo.ecm.core.versioning.VersioningService;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.metrics.MetricsService;
@@ -2082,6 +2083,23 @@ public abstract class AbstractSession implements CoreSession, Serializable {
             throws LifeCycleException {
         Document doc = resolveReference(docRef);
         checkPermission(doc, WRITE_LIFE_CYCLE);
+
+        // backward compat - used to forward deprecated call to followTransition("deleted") to trashService
+        boolean needToCheckDeleteTransitions = !Boolean.parseBoolean(
+                String.valueOf(options.remove(TrashService.IS_ALREADY_CALLED)));
+        if (needToCheckDeleteTransitions && (LifeCycleConstants.DELETE_TRANSITION.equals(transition)
+                || LifeCycleConstants.UNDELETE_TRANSITION.equals(transition))) {
+            // retrieve document model to give to trash service
+            DocumentModel docModel = readModel(doc);
+            options.forEach(docModel::putContextData);
+            TrashService trashService = Framework.getService(TrashService.class);
+            if (LifeCycleConstants.DELETE_TRANSITION.equals(transition)) {
+                trashService.trashDocument(docModel);
+            } else {
+                trashService.untrashDocument(docModel);
+            }
+            return true;
+        }
 
         if (!doc.isVersion() && !doc.isProxy() && !doc.isCheckedOut()) {
             boolean deleteOrUndelete = LifeCycleConstants.DELETE_TRANSITION.equals(transition)
