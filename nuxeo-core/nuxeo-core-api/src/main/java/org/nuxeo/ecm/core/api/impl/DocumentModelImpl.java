@@ -749,7 +749,8 @@ public class DocumentModelImpl implements DocumentModel, Cloneable {
 
     @Override
     public boolean isTrashed() {
-        return LifeCycleConstants.DELETED_STATE.equals(getCurrentLifeCycleState());
+        // TODO move TrashService to nuxeo-core-api in order to not rely on session here ?
+        return getSession().isTrashed(ref);
     }
 
     @Override

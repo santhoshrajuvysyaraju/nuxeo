@@ -41,6 +41,12 @@ public class PropertyTrashService extends AbstractTrashService {
     public static final String SYSPROP_IS_TRASHED = "isTrashed";
 
     @Override
+    public boolean isTrashed(DocumentModel doc) {
+        Boolean isTrashed = doc.getSystemProp(SYSPROP_IS_TRASHED, Boolean.class);
+        return isTrashed != null && isTrashed.booleanValue();
+    }
+
+    @Override
     public void trashDocuments(List<DocumentModel> docs) {
         docs.forEach(this::doTrashDocument);
         docs.stream().map(DocumentModel::getCoreSession).findFirst().ifPresent(CoreSession::save);

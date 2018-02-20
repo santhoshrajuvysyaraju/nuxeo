@@ -39,6 +39,11 @@ public class LifeCycleTrashService extends AbstractTrashService {
     private static final Log log = LogFactory.getLog(LifeCycleTrashService.class);
 
     @Override
+    public boolean isTrashed(DocumentModel doc) {
+        return LifeCycleConstants.DELETED_STATE.equals(doc.getCurrentLifeCycleState());
+    }
+
+    @Override
     public void trashDocuments(List<DocumentModel> docs) {
         if (docs.isEmpty()) {
             return;

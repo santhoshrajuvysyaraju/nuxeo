@@ -49,6 +49,12 @@ public interface TrashService {
     String IS_ALREADY_CALLED = "isAlreadyCalled";
 
     /**
+     * @return whether or not the input {@link DocumentModel} is trashed.
+     * @since 10.1
+     */
+    boolean isTrashed(DocumentModel doc);
+
+    /**
      * Can a child of the folder be trashed?
      *
      * @param folder the folder
