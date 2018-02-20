@@ -59,7 +59,7 @@ object ScnNavigationDownload {
             .randomSwitch(
               70.0 -> exec(NuxeoRest.getDocument("Get document")),
               // TODO download the blob
-              30.0 -> exec(NuxeoRest.getParentFolderOfCurrentDocument("Get document folder")),)
+              30.0 -> exec(NuxeoRest.getParentFolderOfCurrentDocument("Get document folder")))
             .pause(pause)
         }
       }

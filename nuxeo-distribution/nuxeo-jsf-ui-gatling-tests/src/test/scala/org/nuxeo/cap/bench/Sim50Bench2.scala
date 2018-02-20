@@ -19,7 +19,7 @@ package org.nuxeo.cap.bench
 import io.gatling.core.Predef._
 import io.gatling.http.Predef._
 
-class Sim50Bench extends Simulation {
+class Sim50Bench2 extends Simulation {
   val documents = Feeders.createRandomDocFeeder()
 
   val scnNav = ScnNavigationDownload.get(documents, Parameters.getSimulationDuration(),
